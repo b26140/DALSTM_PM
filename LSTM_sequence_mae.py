@@ -18,11 +18,14 @@ under the License.
 """
 
 import numpy as np
+from keras import optimizers
 from keras.datasets import imdb
 from keras.models import Sequential
 from keras.layers import Dense, Input
-from keras.layers import LSTM, GRU
+
+from keras.layers import LSTM, GRU, RepeatVector
 from keras.layers import Dropout
+from keras.layers import Embedding
 from keras.layers.embeddings import Embedding
 from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -33,22 +36,35 @@ from keras import metrics
 from load_dataset import load_dataset
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import sys
+from keras.utils.vis_utils import plot_model
+from keras.models import Model
+
+from sklearn.random_projection import johnson_lindenstrauss_min_dim
+from sklearn import random_projection
 
 
-if len(sys.argv)<3:
-    sys.exit("python LSTM_sequence.py n_neurons n_layers dataset")
-n_neurons=int(sys.argv[1])
-n_layers=int(sys.argv[2])
-dataset=sys.argv[3]
 
+# if len(sys.argv)<3:
+#     sys.exit("python LSTM_sequence.py n_neurons n_layers dataset")
+# n_neurons=int(sys.argv[1])
+# n_layers=int(sys.argv[2])
+# dataset=sys.argv[3]
+encode_size = 200
+n_neurons = 175
+n_layers = 2
+dataset = "HELPDESK17"
 # fix random seed for reproducibility
 np.random.seed(7)
 
 (X_train, y_train),(X_test, y_test)= load_dataset(dataset)
 
+# Training shape = (numberOfSamples, )
+#print X_train here it is just sume number in the form of [[[]]]
+
 #normalize input data
 #compute the normalization values only on training set
 max=[0]*len(X_train[0][0])
+print max
 for a1 in X_train:
     for s in a1:
         for i in xrange(len(s)):
@@ -67,25 +83,37 @@ for a1 in X_test:
             if (max[i] > 0):  # alcuni valori hanno massimo a zero
                 s[i] = s[i] / max[i]
 
-
-X_train = sequence.pad_sequences(X_train)
+X_train = sequence.pad_sequences(X_train) # here we make sure that the lengths of the three list would be equal(just putted zero if not.)
 print("DEBUG: training shape",X_train.shape)
+
+
+
 maxlen=X_train.shape[1]
 X_test = sequence.pad_sequences(X_test, maxlen=X_train.shape[1])
 print("DEBUG: test shape",X_test.shape)
 
+#nsamples1, nx1, ny1 = Y_train.shape
+#Y_train_new = Y_train.reshape((nsamples1,nx1*ny1))
+r_drop = 0.4
+h_act = 'tanh'
+o_act = 'linear'
 
-
-# create the model
 model = Sequential()
+encoding_dim = encode_size
+input_img  = Input(shape=(X_train.shape[1], X_train.shape[2]))
+print(input_img)
+model.add(Dense(encode_size, activation='tanh',input_shape=(X_train.shape[1],X_train.shape[2])))
+##encoded_input = Model(input=input_img, output=encoder)
+##model.add(encoded_input)
+
 if n_layers==1:
-    model.add(LSTM(n_neurons, implementation=2,input_shape=(X_train.shape[1], X_train.shape[2]), recurrent_dropout=0.2))
+    model.add(LSTM(n_neurons,  activation=o_act, implementation=2,input_shape=(X_train.shape[1],X_train.shape[2]), recurrent_dropout=r_drop))
     model.add(BatchNormalization())
 else:
     for i in xrange(n_layers-1):
-        model.add(LSTM(n_neurons, implementation=2, input_shape=(X_train.shape[1], X_train.shape[2]), recurrent_dropout=0.2,return_sequences=True))
+        model.add(LSTM(n_neurons,  activation=h_act,implementation=2, input_shape=(X_train.shape[1],X_train.shape[2]), recurrent_dropout=r_drop,return_sequences=True))
         model.add(BatchNormalization())
-    model.add(LSTM(n_neurons, implementation=2, recurrent_dropout=0.2))
+    model.add(LSTM(n_neurons, activation=h_act,implementation=2, recurrent_dropout=r_drop))
     model.add(BatchNormalization())
 
 
@@ -93,7 +121,8 @@ else:
 model.add(Dense(1))
 
 #compiling the model, creating the callbacks
-model.compile(loss='mae', optimizer='Nadam', metrics=['mean_squared_error', 'mae', 'mape'])
+
+model.compile(loss='mae', optimizer= 'Nadam', metrics=['mean_squared_error', 'mae', 'mape'])
 print(model.summary())
 early_stopping = EarlyStopping(patience=42)
 model_checkpoint = ModelCheckpoint("model/model_"+dataset+"_"+str(n_neurons)+"_"+str(n_layers)+"_weights_best.h5", monitor='val_loss', verbose=0, save_best_only=True,
@@ -123,3 +152,4 @@ print("Created model and loaded weights from file")
 scores = model.evaluate(X_test, y_test, verbose=0)
 print scores
 print("Root Mean Squared Error: %.4f d MAE: %.4f d MAPE: %.4f%%" % (sqrt(scores[1]/((24.0*3600)**2)), scores[2]/(24.0*3600), scores[3]))
+plot_model(model, to_file='/output/model.png')

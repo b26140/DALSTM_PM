@@ -31,7 +31,7 @@ def buildOHE(index,n):
 
 def load_dataset(name):
     if name=="HELPDESK17":
-        return _load_dataset_name("data/Helpdesk2017_anonimyzed.csv")
+        return _load_dataset_name("data/SiavNewWorkload.csv")
     elif name=="BPI12":
         return _load_dataset_name("data/BPI_12_anonimyzed.csv")
     elif name == "BPI12OEA":
@@ -48,24 +48,26 @@ def _load_dataset_name(filename):
 
 
     dataset=dataframe.values
-    #print dataset[0]
-    #dataset=dataset[:,:8]
+    #print dataset[0] # this prints out the first row(basically where the names are)
+    dataset=dataset[:,:9] #Service type ja siav difficulty are basically left out
     values = []
+    print "dataset columns" + str(dataset)
+    print "dataset: " + str(dataset.shape[0])
+    print "dataset: " + str(dataset.shape[1])
     for i in range(dataset.shape[1]):
-        values.append(len(np.unique(dataset[:, i])) )#+1
-    #print values
+        values.append(len(np.unique(dataset[:, i])) )#+1 here we found out how many unique values there are in each column
+    print values # number of unique values in each of the columns
     #exit(1)
-    #print np.unique(dataset[:, 5])
+    print np.unique(dataset[:, 5]) #unique values in the fifth column
     elems_per_fold = int(values[0] / 3)
 
     print "DEBUG: elemns per fold",elems_per_fold
-    datasetTR = dataset[dataset[:,0]<2*elems_per_fold]
+    datasetTR = dataset[dataset[:,0]<2*elems_per_fold] #here we divide this thing to test and train set.
     #test set
     datasetTS = dataset[dataset[:,0]>=2*elems_per_fold]
     #trick empty column siav log
     #datasetTR=datasetTR[:,:8]
     #datasetTS=datasetTS[:,:8]
-
     #print len(values)
     #print dataset[0]
     def generate_set(dataset):
@@ -88,8 +90,9 @@ def _load_dataset_name(filename):
         a.append(timesincemidnight)
         a.append(datetime.fromtimestamp(time.mktime(t)).weekday()+1)
         a.extend(buildOHE(one_hot(dataset[0][1], values[1], split="|")[0], values[1]))
-
+        # a is basically the time columns from the original dataset.
         field = 3
+        # print "hermm: " + str(dataset[0][3:])# last 5 columns.
         for i in dataset[0][3:]:
             if not np.issubdtype(dataframe.dtypes[field], np.number):
                 #print field
@@ -184,14 +187,5 @@ def _load_dataset_name(filename):
         #print temptarget
         print "Generated dataset with n_samples:", len(temptarget)
         assert(len(temptarget)== len(data))
-        #print temptarget
         return data, temptarget
     return generate_set(datasetTR), generate_set(datasetTS)
-
-
-
-
-
-
-
-
